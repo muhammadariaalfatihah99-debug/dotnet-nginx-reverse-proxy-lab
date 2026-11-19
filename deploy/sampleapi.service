@@ -1,0 +1,23 @@
+[Unit]
+Description=Sample ASP.NET Core Web API
+After=network.target
+
+[Service]
+WorkingDirectory=/var/www/sampleapi
+ExecStart=/usr/bin/dotnet /var/www/sampleapi/SampleApi.dll
+Restart=on-failure
+RestartSec=5
+KillSignal=SIGINT
+SyslogIdentifier=sampleapi
+
+# Least privilege: jalan sebagai user sistem tanpa shell, BUKAN root
+User=sampleapi
+Group=sampleapi
+
+# Environment produksi & binding HANYA ke loopback
+Environment=ASPNETCORE_ENVIRONMENT=Production
+Environment=ASPNETCORE_URLS=http://127.0.0.1:5000
+Environment=DOTNET_NOLOGO=1
+
+[Install]
+WantedBy=multi-user.target

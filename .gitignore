@@ -1,0 +1,24 @@
+# ---- Hasil build .NET (bisa dibuat ulang, jangan di-commit) ----
+bin/
+obj/
+publish/
+*.user
+.vs/
+.vscode/
+.idea/
+
+# ---- RAHASIA: jangan pernah masuk repo ----
+*.key
+*.pem
+*.pfx
+*.p12
+*.crt
+*.csr
+.env
+*.env
+secrets.json
+appsettings.*.local.json
+
+# ---- Lain-lain ----
+*.log
+*.bin
