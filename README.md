@@ -85,6 +85,32 @@ echo '127.0.0.1 api.example.test' | sudo tee -a /etc/hosts
 | 11 | Auto-restart saat crash | `kill -9 <MainPID>` | `Failed with result 'signal'` → restart 5 detik ✅ |
 | 12 | `stop` manual tidak di-restart | `systemctl stop sampleapi` | `Deactivated successfully` ✅ |
 
+## Jalur Windows: IIS (in-process)
+
+Artifact hasil `dotnet publish` yang **sama** (framework-dependent, sudah berisi `web.config`) dideploy ke IIS 10 di Windows 11 dengan ASP.NET Core Module V2. Langkah lengkap ada di [`deploy/iis-setup.ps1`](deploy/iis-setup.ps1).
+
+```
+curl ──▶ w3wp.exe [ IIS + ANCM V2 + SampleApi.dll ]   ← satu proses, tanpa port internal
+```
+
+| # | Uji | Hasil |
+|---|---|---|
+| 1 | Response lewat IIS | `200 OK`, `Server: Microsoft-IIS/10.0` ✅ |
+| 2 | In-process hosting | Hanya proses `w3wp`, tidak ada `dotnet.exe` ✅ |
+| 3 | App Pool | `SampleApiPool`, *No Managed Code*, `ApplicationPoolIdentity` ✅ |
+| 4 | Least privilege folder | Hanya `SYSTEM`, `Administrators`, `IIS AppPool\SampleApiPool:(RX)`; user non-admin ditolak ✅ |
+| 5 | HTTPS (SNI, cert di `LocalMachine\My`) | `detectedScheme: "https"` ✅ |
+| 6 | HTTP → HTTPS | `307` oleh `UseHttpsRedirection()` (bukan IIS) ✅ |
+| 7 | Simulasi 500.30 (appsettings.json rusak) | Event Log: `JsonReaderException ... BytePositionInLine: 13`; client hanya melihat halaman generik ✅ |
+
+**Temuan IIS:**
+
+- **`icacls /grant` dari modul tidak cukup untuk least privilege.** Folder di bawah `C:\inetpub` mewarisi `BUILTIN\Users:(RX)`, jadi semua user lokal bisa membaca app. Warisan harus diputus dengan `/inheritance:r /grant:r` (padanan `chmod 750` di Linux).
+- **Forwarded headers tidak dipakai di IIS in-process.** ANCM meneruskan info koneksi langsung di dalam proses, jadi `X-Forwarded-*` dan `X-Original-*` kosong. Kode yang sama tetap aman di kedua platform.
+- **Redirect 307 vs 301.** Nginx memberi 301 di edge (request HTTP tidak sampai ke app), sedangkan di IIS app sendiri yang memberi 307. Untuk produksi: `UseHsts()` atau URL Rewrite 301.
+- **Crash in-process ikut mematikan `w3wp.exe`** (Event `.NET Runtime 1026`), jadi praktik standarnya 1 aplikasi = 1 App Pool.
+- `curl.exe` bawaan Windows (Schannel) tidak mendukung HTTP/2, jadi verifikasi `h2` lewat DevTools browser.
+
 ## Pemetaan Tugas Mandiri (Modul Level 12 Sesi 2, Bagian 8.2)
 
 | Tugas | Status | Bukti |
@@ -93,7 +119,7 @@ echo '127.0.0.1 api.example.test' | sudo tee -a /etc/hosts
 | 2. Audit isolasi jaringan (`ss -ltnp`, firewall) | ✅ sebagian | `ss` ✅ · UFW belum (WSL) |
 | 3. Simulasi troubleshooting upstream mati | ✅ | Temuan #3 (504 vs 502 + log `error.log`) |
 | 4. HTTPS + redirect 301 + `detectedScheme: https` | ✅ | Verifikasi #5–#8 |
-| Bagian 2: Hosting di IIS (Windows) | ⏳ | Belum dikerjakan |
+| Bagian 2: Hosting di IIS (Windows) | ✅ | Lihat bagian "Jalur Windows: IIS" |
 
 ## Temuan & pelajaran
 
